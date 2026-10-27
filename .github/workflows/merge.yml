@@ -15,7 +15,7 @@ jobs:
     steps:
       - name: 下载主源
         run: |
-          curl -s "https://cdn.jsdelivr.net/gh/ipiptv/collect-txt@main/bbxx365.m3u" -o /tmp/bbxx365.m3u
+          curl -s "https://raw.githubusercontent.com/ipiptv/collect-txt/main/bbxx365.m3u" -o /tmp/bbxx365.m3u
           echo "原始频道数: $(grep -c '#EXTINF' /tmp/bbxx365.m3u)"
 
       - name: 下载 hotel_tvn
