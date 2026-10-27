@@ -1,0 +1,46 @@
+name: 自动合并 IPTV 源
+
+on:
+  schedule:
+    - cron: '0 23 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  merge:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 下载两个源
+        run: |
+          curl -s "https://cdn.jsdelivr.net/gh/ipiptv/collect-txt@main/bbxx365.m3u" -o /tmp/bbxx365.m3u
+          curl -s "https://iptv-4us.pages.dev/hotel_tvn.m3u" -o /tmp/hotel_tvn.m3u
+
+      - name: 合并
+        run: |
+          python3 -c "
+          import re
+          with open('/tmp/bbxx365.m3u') as f: l1=f.readlines()
+          with open('/tmp/hotel_tvn.m3u') as f: l2=f.readlines()
+          r=[l for l in l1 if not l.startswith('#EXTM3U')]
+          for l in l2:
+              if l.startswith('#EXTM3U'): continue
+              if 'group-title=' in l: l=re.sub(r'group-title=\"([^\"]*)\"',r'group-title=\"[酒店] \1\"',l)
+              r.append(l)
+          with open('/tmp/merged.m3u','w') as f: f.write('#EXTM3U\n'); f.writelines(r)
+          print('频道数:', open('/tmp/merged.m3u').read().count('#EXTINF'))
+          "
+
+      - name: 提交
+        run: |
+          git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
+          cd iptv-sources-cloud
+          git config user.email "bot@bot.com"
+          git config user.name "bot"
+          cp /tmp/merged.m3u m3u/merged.m3u
+          mkdir -p m3u
+          cp /tmp/merged.m3u m3u/merged.m3u
+          git add m3u/merged.m3u
+          git commit -m "自动合并 [skip ci]" || echo "无变化"
+          git push
