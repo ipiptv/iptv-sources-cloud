@@ -12,12 +12,17 @@ jobs:
   merge:
     runs-on: ubuntu-latest
     steps:
-      - name: 下载两个源
+      - name: 下载主源 bbxx365.m3u
         run: |
           curl -s "https://cdn.jsdelivr.net/gh/ipiptv/collect-txt@main/bbxx365.m3u" -o /tmp/bbxx365.m3u
-          curl -s "https://iptv-4us.pages.dev/hotel_tvn.m3u" -o /tmp/hotel_tvn.m3u
+          echo "bbxx365 频道数: $(grep -c '#EXTINF' /tmp/bbxx365.m3u)"
 
-      - name: 合并
+      - name: 下载 hotel_tvn.m3u
+        run: |
+          curl -s "https://iptv-4us.pages.dev/hotel_tvn.m3u" -o /tmp/hotel_tvn.m3u
+          echo "hotel_tvn 频道数: $(grep -c '#EXTINF' /tmp/hotel_tvn.m3u)"
+
+      - name: 合并两个源
         run: |
           python3 -c "
           import re
@@ -29,17 +34,15 @@ jobs:
               if 'group-title=' in l: l=re.sub(r'group-title=\"([^\"]*)\"',r'group-title=\"[酒店] \1\"',l)
               r.append(l)
           with open('/tmp/merged.m3u','w') as f: f.write('#EXTM3U\n'); f.writelines(r)
-          print('频道数:', open('/tmp/merged.m3u').read().count('#EXTINF'))
+          print('合并完成，频道数:', open('/tmp/merged.m3u').read().count('#EXTINF'))
           "
 
-      - name: 提交
+      - name: 克隆仓库并提交
         run: |
           git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
-          cd iptv-sources-cloud
+          cd $(basename ${{ github.repository }})
           git config user.email "bot@bot.com"
           git config user.name "bot"
-          
-         
           mkdir -p m3u
           cp /tmp/merged.m3u m3u/merged.m3u
           git add m3u/merged.m3u
