@@ -38,7 +38,8 @@ jobs:
           cd iptv-sources-cloud
           git config user.email "bot@bot.com"
           git config user.name "bot"
-          cp /tmp/merged.m3u m3u/merged.m3u
+          
+         
           mkdir -p m3u
           cp /tmp/merged.m3u m3u/merged.m3u
           git add m3u/merged.m3u
