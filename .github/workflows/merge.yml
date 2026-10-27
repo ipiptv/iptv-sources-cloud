@@ -1,8 +1,9 @@
-name: 自动合并（每个频道保留前10个最快源）
+name: 自动合并（每天两次）
 
 on:
   schedule:
-    - cron: '0 23 * * *'
+    - cron: '0 23 * * *'  # UTC 23:00 = 北京时间 早上 7:00
+    - cron: '0 7 * * *'   # UTC 07:00 = 北京时间 下午 15:00
   workflow_dispatch:
 
 permissions:
@@ -22,7 +23,7 @@ jobs:
           curl -s "https://iptv-4us.pages.dev/hotel_tvn.m3u" -o /tmp/hotel_tvn.m3u
           echo "hotel_tvn 频道数: $(grep -c '#EXTINF' /tmp/hotel_tvn.m3u)"
 
-      - name: 过滤 + 测速 + 每个频道保留前10个最快的
+      - name: 过滤 + 测速（3秒超时，100并行）+ 每个频道保留前10个最快的
         run: |
           python3 << 'PYEOF'
           import re
@@ -31,7 +32,7 @@ jobs:
           import socket
           import time
 
-          socket.setdefaulttimeout(10)
+          socket.setdefaulttimeout(3)
 
           with open('/tmp/bbxx365.m3u') as f:
               lines = f.readlines()
@@ -72,58 +73,47 @@ jobs:
                   i += 1
 
           print(f"过滤后频道数: {sum(len(v) for v in groups.values())}")
-          print(f"不同频道名: {len(groups)}")
 
           def test_channel(item):
               name, line, url = item
-              if not url.startswith('http'):
-                  return name, line, url, 999
+              if not url.startswith('http'): return name, line, url, 999
               start = time.time()
               try:
                   req = urllib.request.Request(url, method='HEAD')
-                  resp = urllib.request.urlopen(req, timeout=10)
-                  speed = time.time() - start
-                  return name, line, url, speed
+                  resp = urllib.request.urlopen(req, timeout=3)
+                  return name, line, url, time.time() - start
               except:
                   try:
                       start = time.time()
                       req = urllib.request.Request(url)
-                      resp = urllib.request.urlopen(req, timeout=10)
+                      resp = urllib.request.urlopen(req, timeout=3)
                       resp.read(1024)
-                      speed = time.time() - start
-                      return name, line, url, speed
+                      return name, line, url, time.time() - start
                   except:
                       return name, line, url, 999
 
           print("开始测速...")
-          all_items = []
-          for name, items in groups.items():
-              for line, url in items:
-                  all_items.append((name, line, url))
+          all_items = [(n, l, u) for n, items in groups.items() for l, u in items]
 
           results = {}
-          with concurrent.futures.ThreadPoolExecutor(max_workers=50) as executor:
+          with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
               for name, line, url, speed in executor.map(test_channel, all_items):
                   if speed < 999:
-                      if name not in results:
-                          results[name] = []
-                      results[name].append((speed, line, url))
+                      results.setdefault(name, []).append((speed, line, url))
 
-          print(f"能打开的频道数: {sum(len(v) for v in results.values())}")
+          print(f"能打开的: {sum(len(v) for v in results.values())}")
 
           final = []
           for name, items in results.items():
               items.sort(key=lambda x: x[0])
-              for speed, line, url in items[:10]:
-                  final.append((line, url))
+              final.extend((l, u) for s, l, u in items[:10])
 
-          print(f"每个频道保留前10个后: {len(final)}")
+          print(f"每个频道前10个: {len(final)}")
 
           result = []
           for line, url in final:
               result.append(line)
               result.append(url + '\n')
-
           for line in lines2:
               if line.startswith('#EXTM3U'): continue
               if 'group-title=' in line:
@@ -134,7 +124,7 @@ jobs:
               f.write('#EXTM3U\n')
               f.writelines(result)
 
-          print(f"合并完成，总频道数: {open('/tmp/merged.m3u').read().count('#EXTINF')}")
+          print(f"合并完成: {open('/tmp/merged.m3u').read().count('#EXTINF')}")
           PYEOF
 
       - name: 提交到仓库
@@ -146,5 +136,5 @@ jobs:
           mkdir -p m3u
           cp /tmp/merged.m3u m3u/merged.m3u
           git add m3u/merged.m3u
-          git commit -m "自动合并：每个频道保留前10个最快源 [skip ci]" || echo "无变化"
+          git commit -m "自动合并 [skip ci]" || echo "无变化"
           git push
