@@ -1,3 +1,4 @@
+            
 name: 自动合并（每天两次）
 
 on:
@@ -23,16 +24,10 @@ jobs:
           curl -s "https://iptv-4us.pages.dev/hotel_tvn.m3u" -o /tmp/hotel_tvn.m3u
           echo "hotel_tvn 频道数: $(grep -c '#EXTINF' /tmp/hotel_tvn.m3u)"
 
-      - name: 过滤 + 测速（3秒超时，100并行）+ 每个频道保留前10个最快的
+      - name: 过滤 + 合并（不测速，所有源全保留）
         run: |
           python3 << 'PYEOF'
           import re
-          import concurrent.futures
-          import urllib.request
-          import socket
-          import time
-
-          socket.setdefaulttimeout(3)
 
           with open('/tmp/bbxx365.m3u') as f:
               lines = f.readlines()
@@ -55,7 +50,7 @@ jobs:
               if 'group-title=' not in line: return False
               return any(g.lower() in line.lower() for g in exclude)
 
-          groups = {}
+          result = []
           i = 0
           while i < len(lines):
               line = lines[i]
@@ -63,57 +58,15 @@ jobs:
                   if is_exclude(line):
                       i += 2
                       continue
-                  name = line.split(',')[-1].strip()
-                  url = lines[i+1].strip() if i+1 < len(lines) else ''
-                  if name not in groups:
-                      groups[name] = []
-                  groups[name].append((line, url))
+                  result.append(line)
+                  if i+1 < len(lines):
+                      result.append(lines[i+1])
                   i += 2
               else:
                   i += 1
 
-          print(f"过滤后频道数: {sum(len(v) for v in groups.values())}")
+          print(f"过滤后频道数: {sum(1 for l in result if l.startswith('#EXTINF'))}")
 
-          def test_channel(item):
-              name, line, url = item
-              if not url.startswith('http'): return name, line, url, 999
-              start = time.time()
-              try:
-                  req = urllib.request.Request(url, method='HEAD')
-                  resp = urllib.request.urlopen(req, timeout=3)
-                  return name, line, url, time.time() - start
-              except:
-                  try:
-                      start = time.time()
-                      req = urllib.request.Request(url)
-                      resp = urllib.request.urlopen(req, timeout=3)
-                      resp.read(1024)
-                      return name, line, url, time.time() - start
-                  except:
-                      return name, line, url, 999
-
-          print("开始测速...")
-          all_items = [(n, l, u) for n, items in groups.items() for l, u in items]
-
-          results = {}
-          with concurrent.futures.ThreadPoolExecutor(max_workers=100) as executor:
-              for name, line, url, speed in executor.map(test_channel, all_items):
-                  if speed < 999:
-                      results.setdefault(name, []).append((speed, line, url))
-
-          print(f"能打开的: {sum(len(v) for v in results.values())}")
-
-          final = []
-          for name, items in results.items():
-              items.sort(key=lambda x: x[0])
-              final.extend((l, u) for s, l, u in items[:10])
-
-          print(f"每个频道前10个: {len(final)}")
-
-          result = []
-          for line, url in final:
-              result.append(line)
-              result.append(url + '\n')
           for line in lines2:
               if line.startswith('#EXTM3U'): continue
               if 'group-title=' in line:
