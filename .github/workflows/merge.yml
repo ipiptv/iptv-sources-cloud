@@ -2,8 +2,8 @@ name: 自动合并（每天两次）
 
 on:
   schedule:
-    - cron: '0 23 * * *'  # UTC 23:00 = 北京时间 早上 7:00
-    - cron: '0 7 * * *'   # UTC 07:00 = 北京时间 下午 15:00
+    - cron: '0 23 * * *'  # 北京时间 早上 7:00
+    - cron: '0 7 * * *'   # 北京时间 下午 15:00
   workflow_dispatch:
 
 permissions:
@@ -127,14 +127,13 @@ jobs:
           print(f"合并完成: {open('/tmp/merged.m3u').read().count('#EXTINF')}")
           PYEOF
 
-      - name: 提交到仓库
+      - name: 提交到仓库（直接放根目录）
         run: |
           git clone https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git
           cd $(basename ${{ github.repository }})
           git config user.email "bot@bot.com"
           git config user.name "bot"
-          mkdir -p m3u
-          cp /tmp/merged.m3u m3u/merged.m3u
-          git add m3u/merged.m3u
+          cp /tmp/merged.m3u merged.m3u
+          git add merged.m3u
           git commit -m "自动合并 [skip ci]" || echo "无变化"
           git push
