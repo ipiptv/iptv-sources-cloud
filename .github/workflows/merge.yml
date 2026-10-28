@@ -23,7 +23,7 @@ jobs:
           curl -s "https://iptv-4us.pages.dev/hotel_tvn.m3u" -o /tmp/hotel_tvn.m3u
           echo "hotel_tvn 频道数: $(grep -c '#EXTINF' /tmp/hotel_tvn.m3u)"
 
-      - name: 过滤 + 合并（不测速，所有源全保留）
+      - name: 白名单过滤 + 合并（只保留指定分组，不测速）
         run: |
           python3 << 'PYEOF'
           import re
@@ -33,46 +33,75 @@ jobs:
           with open('/tmp/hotel_tvn.m3u') as f:
               lines2 = f.readlines()
 
-          exclude = [
-              '广东频道','浙江频道','湖南频道','上海频道','湖北频道','山东频道',
-              '江苏频道','黑龙江频道','河北频道','四川频道','福建频道','河南频道',
-              '北京频道','天津频道','重庆频道','辽宁频道','吉林频道','安徽频道',
-              '江西频道','陕西频道','山西频道','云南频道','贵州频道','广西频道',
-              '海南频道','甘肃频道','青海频道','宁夏频道','新疆频道','西藏频道',
-              '内蒙古频道','直播中国','地方台','专区','手工区',
-              '咪咕直播','spoRTs','SPORTS','优质个源','专享源','定制台',
-              '英语频道','明星','电影频道','电视剧频道','主题片','纪录片',
-              '戏曲频道','音乐频道','游戏频道','春晚','MTV','收音机频道',
-              '体育频道','内蒙频道','解说频道',
-              '港澳台','国际台','动画片','综艺频道'
+          # 白名单：(匹配关键词, 输出分组名)，按输出顺序排列
+          groups_order = [
+              ('卫视频道',    '❤️卫视频道'),
+              ('央视频道',    '❤️央视频道'),
+              ('专享卫视',    '❤️专享卫视'),
+              ('专享央视',    '❤️专享央视'),
+              ('儿童专享',    '💓儿童专享'),
+              ('电影点播',    '❤️电影点播'),
+              ('解说频道',    '💕解说频道'),
+              ('💓电视剧',    '💓电视剧'),
+              ('台湾台',      '💓台湾台'),
+              ('港澳台📶',    '💓港澳台'),
+              ('国际台',      '💕国际台'),
+              ('4K(Auto)',   '💓4K(Auto)'),
+              ('4K(Test)',   '💓4K(Test)'),
+              ('更新时间',    '❤️更新时间'),
           ]
 
-          def is_exclude(line):
-              if 'group-title=' not in line: return False
-              return any(g.lower() in line.lower() for g in exclude)
+          def match_group(line):
+              for idx, (keyword, new_name) in enumerate(groups_order):
+                  if keyword.lower() in line.lower():
+                      return idx, new_name
+              return -1, None
 
-          result = []
+          buckets = {i: [] for i in range(len(groups_order))}
           i = 0
           while i < len(lines):
               line = lines[i]
               if line.startswith('#EXTINF'):
-                  if is_exclude(line):
-                      i += 2
-                      continue
-                  result.append(line)
-                  if i+1 < len(lines):
-                      result.append(lines[i+1])
+                  idx, new_name = match_group(line)
+                  if idx >= 0:
+                      line = re.sub(r'group-title="[^"]*"', f'group-title="{new_name}"', line)
+                      buckets[idx].append(line)
+                      if i+1 < len(lines):
+                          buckets[idx].append(lines[i+1])
                   i += 2
               else:
                   i += 1
 
-          print(f"过滤后频道数: {sum(1 for l in result if l.startswith('#EXTINF'))}")
+          result = []
 
-          for line in lines2:
-              if line.startswith('#EXTM3U'): continue
-              if 'group-title=' in line:
-                  line = re.sub(r'group-title="([^"]*)"', r'group-title="[酒店] \1"', line)
-              result.append(line)
+          # 酒店源放第一位，按 卫视→央视→其他 排序
+          hotel_order = ['卫视频道', '央视频道', '其他频道']
+          hotel_buckets = {g: [] for g in hotel_order}
+          i = 0
+          while i < len(lines2):
+              line = lines2[i]
+              if line.startswith('#EXTINF'):
+                  matched = None
+                  for g in hotel_order:
+                      if g in line:
+                          matched = g
+                          break
+                  if matched:
+                      line = re.sub(r'group-title="([^"]*)"', r'group-title="🌹\1"', line)
+                      hotel_buckets[matched].append(line)
+                      if i+1 < len(lines2):
+                          hotel_buckets[matched].append(lines2[i+1])
+                  i += 2
+              else:
+                  i += 1
+          for g in hotel_order:
+              result.extend(hotel_buckets[g])
+
+          # 主源分组按指定顺序
+          for idx in range(len(groups_order)):
+              result.extend(buckets[idx])
+
+          print(f"过滤后频道数: {sum(1 for l in result if l.startswith('#EXTINF'))}")
 
           with open('/tmp/merged.m3u', 'w') as f:
               f.write('#EXTM3U\n')
