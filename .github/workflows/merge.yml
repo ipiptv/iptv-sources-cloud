@@ -2,8 +2,8 @@ name: 自动合并（每天两次）
 
 on:
   schedule:
-    - cron: '0 23 * * *'  # 北京时间 早上 7:00
-    - cron: '0 7 * * *'   # 北京时间 下午 15:00
+    - cron: '0 21 * * *'   # 北京时间 凌晨 5:00（主源4:45更新后）
+    - cron: '0 6 * * *'    # 北京时间 下午 14:00（主源13:45更新后）
   workflow_dispatch:
 
 permissions:
@@ -48,8 +48,7 @@ jobs:
               ('4K(Auto)',   '💓4K(Auto)'),
               ('4K(Test)',   '💓4K(Test)'),
               ('更新时间',    '❤️更新时间'),
-              ('电影频道',    '❤️电影频道'),
-              ]
+          ]
 
           def match_group(line):
               for idx, (keyword, new_name) in enumerate(groups_order):
@@ -111,7 +110,7 @@ jobs:
           print(f"过滤后频道数: {sum(1 for l in result if l.startswith('#EXTINF'))}")
 
           with open('/tmp/merged.m3u', 'w') as f:
-              f.write('#EXTM3U\n')
+              f.write('#EXTM3U x-tvg-url="https://live.fanmingming.cn/e.xml,https://tv.whyun.com/epg/51zmt.xml"\n')
               f.writelines(result)
 
           print(f"合并完成: {open('/tmp/merged.m3u').read().count('#EXTINF')}")
