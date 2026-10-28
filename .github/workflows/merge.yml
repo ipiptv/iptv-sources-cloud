@@ -71,6 +71,13 @@ jobs:
               else:
                   i += 1
 
+          # 更新时间分组：只保留第一个频道，替换为指定播放地址
+          update_idx = next(i for i, (k, _) in enumerate(groups_order) if k == '更新时间')
+          if buckets[update_idx]:
+              first_extinf = buckets[update_idx][0]
+              buckets[update_idx] = [first_extinf,
+                  'https://txmov2.a.kwimgs.com/upic/2024/01/09/12/BMjAyNDAxMDkxMjA2MDdfMzQ4MzI0MjA1OF8xMjE2Nzg4Mjk4NTZfMF8z_b_Bc9f7d3b0c4b69136e61d8328a8538bd2.mp4?clientCacheKey=3xajh8b4u5j6uva_b.mp4\n']
+
           result = []
 
           # 酒店源放第一位，按 卫视→央视→其他 排序
