@@ -48,7 +48,8 @@ jobs:
               ('4K(Auto)',   '💓4K(Auto)'),
               ('4K(Test)',   '💓4K(Test)'),
               ('更新时间',    '❤️更新时间'),
-          ]
+              ('电影频道,    '❤️电影频道'),
+              ]
 
           def match_group(line):
               for idx, (keyword, new_name) in enumerate(groups_order):
